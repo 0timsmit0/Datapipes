@@ -1,8 +1,9 @@
 """Generate dummy seed data for the e-commerce database."""
 
+import csv
 import random
-import string
 from datetime import datetime, timedelta
+from pathlib import Path
 
 random.seed(42)
 
@@ -92,10 +93,6 @@ CATEGORIES = {
 ORDER_STATUSES = ["pending", "confirmed", "shipped", "delivered", "cancelled"]
 
 
-def sql_escape(s: str) -> str:
-    return s.replace("'", "''")
-
-
 def random_phone() -> str:
     return f"+1-{random.randint(200,999)}-{random.randint(100,999)}-{random.randint(1000,9999)}"
 
@@ -110,105 +107,83 @@ def random_date(start: datetime, end: datetime) -> datetime:
     return start + timedelta(seconds=random_seconds)
 
 
-def generate():
-    lines = []
+def generate(output_dir: Path):
+    """Generate CSV files for customers, products, and orders."""
     now = datetime(2025, 1, 15)
     customer_start = now - timedelta(days=730)
 
     # --- Customers ---
-    lines.append("-- Customers")
-    lines.append(
-        "INSERT INTO customers (first_name, last_name, email, phone, address, city, country, created_at) VALUES"
-    )
+    customers_file = output_dir / "customers.csv"
     used_emails = set()
-    customer_rows = []
-    for i in range(500):
-        first = random.choice(FIRST_NAMES)
-        last = random.choice(LAST_NAMES)
-        # Ensure unique email
-        email_base = f"{first.lower()}.{last.lower()}"
-        email = f"{email_base}@example.com"
-        counter = 1
-        while email in used_emails:
-            email = f"{email_base}{counter}@example.com"
-            counter += 1
-        used_emails.add(email)
+    with open(customers_file, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["id", "first_name", "last_name", "email", "phone", "address", "city", "country", "created_at"])
+        for i in range(1, 501):
+            first = random.choice(FIRST_NAMES)
+            last = random.choice(LAST_NAMES)
+            email_base = f"{first.lower()}.{last.lower()}"
+            email = f"{email_base}@example.com"
+            counter = 1
+            while email in used_emails:
+                email = f"{email_base}{counter}@example.com"
+                counter += 1
+            used_emails.add(email)
 
-        phone = random_phone()
-        address = random_address()
-        city, country = random.choice(CITIES)
-        created = random_date(customer_start, now)
-        customer_rows.append(
-            f"('{sql_escape(first)}', '{sql_escape(last)}', '{email}', '{phone}', "
-            f"'{sql_escape(address)}', '{city}', '{country}', '{created.strftime('%Y-%m-%d %H:%M:%S')}')"
-        )
-    lines.append(",\n".join(customer_rows) + ";\n")
+            phone = random_phone()
+            address = random_address()
+            city, country = random.choice(CITIES)
+            created = random_date(customer_start, now)
+            writer.writerow([i, first, last, email, phone, address, city, country, created.strftime("%Y-%m-%d %H:%M:%S")])
+    print(f"Generated: {customers_file}")
 
     # --- Products ---
-    lines.append("-- Products")
-    lines.append(
-        "INSERT INTO products (name, category, price, stock_quantity, description, created_at) VALUES"
-    )
-    product_rows = []
+    products_file = output_dir / "products.csv"
     product_prices = []
-    for i in range(1000):
-        category = random.choice(list(CATEGORIES.keys()))
-        base_name = random.choice(CATEGORIES[category])
-        # Add variant to make products more varied
-        variant = random.choice(["", " Pro", " Plus", " Lite", " Max", " Mini", " XL", " V2", " Elite", " Basic"])
-        color = random.choice(["", " - Black", " - White", " - Blue", " - Red", " - Green", " - Gray", " - Silver"])
-        name = f"{base_name}{variant}{color}"
+    with open(products_file, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["id", "name", "category", "price", "stock_quantity", "description", "created_at"])
+        for i in range(1, 1001):
+            category = random.choice(list(CATEGORIES.keys()))
+            base_name = random.choice(CATEGORIES[category])
+            variant = random.choice(["", " Pro", " Plus", " Lite", " Max", " Mini", " XL", " V2", " Elite", " Basic"])
+            color = random.choice(["", " - Black", " - White", " - Blue", " - Red", " - Green", " - Gray", " - Silver"])
+            name = f"{base_name}{variant}{color}"
 
-        price_ranges = {
-            "Electronics": (9.99, 299.99),
-            "Clothing": (12.99, 149.99),
-            "Home & Kitchen": (7.99, 89.99),
-            "Books": (9.99, 59.99),
-            "Sports": (8.99, 129.99),
-        }
-        lo, hi = price_ranges[category]
-        price = round(random.uniform(lo, hi), 2)
-        product_prices.append(price)
-        stock = random.randint(0, 500)
-        desc = f"High quality {base_name.lower()} in the {category.lower()} category."
-        created = random_date(customer_start, now)
-
-        product_rows.append(
-            f"('{sql_escape(name)}', '{sql_escape(category)}', {price}, {stock}, "
-            f"'{sql_escape(desc)}', '{created.strftime('%Y-%m-%d %H:%M:%S')}')"
-        )
-    lines.append(",\n".join(product_rows) + ";\n")
+            price_ranges = {
+                "Electronics": (9.99, 299.99),
+                "Clothing": (12.99, 149.99),
+                "Home & Kitchen": (7.99, 89.99),
+                "Books": (9.99, 59.99),
+                "Sports": (8.99, 129.99),
+            }
+            lo, hi = price_ranges[category]
+            price = round(random.uniform(lo, hi), 2)
+            product_prices.append(price)
+            stock = random.randint(0, 500)
+            desc = f"High quality {base_name.lower()} in the {category.lower()} category."
+            created = random_date(customer_start, now)
+            writer.writerow([i, name, category, price, stock, desc, created.strftime("%Y-%m-%d %H:%M:%S")])
+    print(f"Generated: {products_file}")
 
     # --- Orders ---
-    lines.append("-- Orders")
-    lines.append(
-        "INSERT INTO orders (customer_id, product_id, quantity, total_amount, status, order_date) VALUES"
-    )
+    orders_file = output_dir / "orders.csv"
     order_start = now - timedelta(days=365)
-    order_rows = []
-    for i in range(1000):
-        customer_id = random.randint(1, 500)
-        product_id = random.randint(1, 1000)
-        quantity = random.choices([1, 2, 3, 4, 5], weights=[50, 25, 15, 7, 3])[0]
-        total = round(product_prices[product_id - 1] * quantity, 2)
-        status = random.choices(
-            ORDER_STATUSES, weights=[10, 15, 20, 50, 5]
-        )[0]
-        order_date = random_date(order_start, now)
-
-        order_rows.append(
-            f"({customer_id}, {product_id}, {quantity}, {total}, "
-            f"'{status}', '{order_date.strftime('%Y-%m-%d %H:%M:%S')}')"
-        )
-    lines.append(",\n".join(order_rows) + ";\n")
-
-    return "\n".join(lines)
+    with open(orders_file, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["id", "customer_id", "product_id", "quantity", "total_amount", "status", "order_date"])
+        for i in range(1, 1001):
+            customer_id = random.randint(1, 500)
+            product_id = random.randint(1, 1000)
+            quantity = random.choices([1, 2, 3, 4, 5], weights=[50, 25, 15, 7, 3])[0]
+            total = round(product_prices[product_id - 1] * quantity, 2)
+            status = random.choices(ORDER_STATUSES, weights=[10, 15, 20, 50, 5])[0]
+            order_date = random_date(order_start, now)
+            writer.writerow([i, customer_id, product_id, quantity, total, status, order_date.strftime("%Y-%m-%d %H:%M:%S")])
+    print(f"Generated: {orders_file}")
 
 
 if __name__ == "__main__":
-    import pathlib
-
-    output = pathlib.Path(__file__).parent / "raw" / "seed_data.sql"
-    sql = generate()
-    output.write_text(sql)
-    print(f"Generated seed data: {output} ({len(sql)} bytes)")
+    output_dir = Path(__file__).parent / "raw"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    generate(output_dir)
+    print("Seed data generation complete.")
